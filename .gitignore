@@ -1,0 +1,11 @@
+.env
+.env.template
+database/mock_db.json
+__pycache__/
+*.pyc
+.streamlit/
+*.wav
+*.mp3
+pwd_info.txt
+button_audit.py
+inspect_pwd.py
