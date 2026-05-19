@@ -159,5 +159,22 @@ h1, h2, h3 {
     caret-color: var(--cyan) !important; /* Glowing blinking caret pointer */
 }
 
+/* Decreased color intensity for placeholders to look like reference hints */
+::placeholder {
+    color: rgba(255, 255, 255, 0.35) !important;
+    -webkit-text-fill-color: rgba(255, 255, 255, 0.35) !important;
+    opacity: 1 !important;
+}
+::-webkit-input-placeholder {
+    color: rgba(255, 255, 255, 0.35) !important;
+    -webkit-text-fill-color: rgba(255, 255, 255, 0.35) !important;
+    opacity: 1 !important;
+}
+:-ms-input-placeholder {
+    color: rgba(255, 255, 255, 0.35) !important;
+    -webkit-text-fill-color: rgba(255, 255, 255, 0.35) !important;
+    opacity: 1 !important;
+}
+
 /* Streamlit specific UI hiding */
 #MainMenu, footer, header { visibility: hidden; }
