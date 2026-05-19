@@ -214,26 +214,8 @@ def render_round5():
             
             with st.spinner("Decoding vocal spectrum..."):
                 trans = transcribe_audio(audio_bytes)
-                score = evaluate_response(question, trans)
-                
-                db.client.table('hr_voice_transcriptions').insert({
-                    'user_id': user_id,
-                    'question': question,
-                    'transcription': trans,
-                    'score': score 
-                }).execute()
-                
-                st.session_state.last_transcription = trans
-                st.session_state.last_score = score
-                
-                if curr_idx == len(HR_QUESTIONS) - 1:
-                    # Final Round update
-                    all_trans = db.client.table('hr_voice_transcriptions').select('score').eq('user_id', user_id).execute()
-                    all_scores = [d.get('score', 0) for d in all_trans.data] + [score]
-                    final_avg = int(sum(all_scores) / len(all_scores))
-                    db.client.table('candidate_scores').update({'round5_score': final_avg}).eq('user_id', user_id).execute()
-                    db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
-                
+                st.session_state.temp_transcription = trans
+                st.session_state.temp_audio_ready = True
                 st.rerun()
 
         # Toggle manual text entry
@@ -243,6 +225,8 @@ def render_round5():
         st.markdown('<div style="text-align: center; margin-top: 15px;">', unsafe_allow_html=True)
         if st.button("⌨️ Write response text instead", key="toggle_manual_input"):
             st.session_state.show_manual_voice_input = not st.session_state.show_manual_voice_input
+            st.session_state.temp_transcription = None
+            st.session_state.temp_audio_ready = False
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -271,6 +255,8 @@ def render_round5():
                             db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
                         
                         st.session_state.show_manual_voice_input = False
+                        st.session_state.temp_transcription = None
+                        st.session_state.temp_audio_ready = False
                         st.rerun()
                 else:
                     st.warning("Please type a response before submitting.")
@@ -497,8 +483,44 @@ def render_round5():
         """
         components.html(recorder_html, height=240)
 
-        # Display last transcription if available
-        if 'last_transcription' in st.session_state:
+        # Review Box for newly recorded audio response before committing
+        if st.session_state.get("temp_audio_ready") and st.session_state.get("temp_transcription"):
+            st.markdown(f"""
+                <div class="glass-card" style="margin-top: 20px; border: 1px dashed var(--accent); background: rgba(124, 58, 237, 0.05);">
+                    <h4 style="color: var(--accent); margin-bottom: 10px;">🎙️ DETECTED VOCAL TRANSCRIPTION:</h4>
+                    <p style="font-style: italic; color: white; font-size: 16px;">"{st.session_state.temp_transcription}"</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("SUBMIT ANSWER & NEXT QUESTION ➡️", type="primary", use_container_width=True, key="submit_voice_next"):
+                with st.spinner("Analyzing and scoring response..."):
+                    trans = st.session_state.temp_transcription
+                    score = evaluate_response(question, trans)
+                    
+                    db.client.table('hr_voice_transcriptions').insert({
+                        'user_id': user_id,
+                        'question': question,
+                        'transcription': trans,
+                        'score': score 
+                    }).execute()
+                    
+                    st.session_state.last_transcription = trans
+                    st.session_state.last_score = score
+                    
+                    if curr_idx == len(HR_QUESTIONS) - 1:
+                        all_trans = db.client.table('hr_voice_transcriptions').select('score').eq('user_id', user_id).execute()
+                        all_scores = [d.get('score', 0) for d in all_trans.data] + [score]
+                        final_avg = int(sum(all_scores) / len(all_scores))
+                        db.client.table('candidate_scores').update({'round5_score': final_avg}).eq('user_id', user_id).execute()
+                        db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
+                    
+                    # Reset temp states
+                    st.session_state.temp_transcription = None
+                    st.session_state.temp_audio_ready = False
+                    st.rerun()
+
+        # Display last transcription if available (only show when not actively reviewing a new record)
+        elif 'last_transcription' in st.session_state:
             st.markdown(f"""
                 <div class="glass-card" style="margin-top: 30px; border: 1px dashed var(--accent);">
                     <h4 style="color: var(--accent); margin-bottom: 15px;">TRANSCRIPTION LOG:</h4>
