@@ -3,6 +3,7 @@ Anti-Cheating Module: Sidebar Gateway Edition
 Premium UI (Landing Page Reference)
 """
 
+import os
 import streamlit as st
 import streamlit.components.v1 as components
 from database.init_db import get_db
@@ -45,23 +46,80 @@ def render_sidebar_security():
         """, height=160)
 
         if not st.session_state.get('proctoring_verified', False):
-            if st.button("🔐 VERIFY IDENTITY", use_container_width=True, type="primary", key="sidebar_verify_btn"):
-                st.session_state.proctoring_verified = True
-                st.rerun()
+            st.sidebar.warning("⏳ Verification Required")
 
     if not st.session_state.get('proctoring_verified', False):
-        st.markdown('<div style="height: 10vh;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height: 5vh;"></div>', unsafe_allow_html=True)
         st.markdown("""
-            <div class="glass-card" style="text-align: center;">
-                <h1 style="font-size: 42px; margin-bottom: 25px;">IDENTITY VERIFICATION</h1>
-                <p style="font-size: 18px; color: rgba(255,255,255,0.6); max-width: 600px; margin: 0 auto 40px auto;">
-                    To maintain the integrity of the neural assessment, please verify your identity via the sidebar camera.
+            <div class="glass-card" style="text-align: center; max-width: 600px; margin: 0 auto;">
+                <h1 style="font-size: 36px; margin-bottom: 15px; background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">IDENTITY VERIFICATION</h1>
+                <p style="font-size: 15px; color: rgba(255,255,255,0.6); margin-bottom: 25px;">
+                    Please align your face within the pulsing target area below to authorize your session.
                 </p>
-                <div style="padding: 20px; border-radius: 12px; background: rgba(99, 102, 241, 0.05); border: 1px dashed var(--primary); display: inline-block;">
-                    <span style="color: var(--primary); font-weight: 700;">STATUS: WAITING FOR SECURE LINK...</span>
-                </div>
             </div>
         """, unsafe_allow_html=True)
+        
+        # Dotted target circle styling
+        st.markdown("""
+            <style>
+                .camera-wrapper {
+                    position: relative;
+                    width: 320px;
+                    margin: 20px auto;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    border: 2px solid rgba(99, 102, 241, 0.3);
+                    box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+                }
+                .target-circle {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 160px;
+                    height: 160px;
+                    border: 3px dashed #6366f1;
+                    border-radius: 50%;
+                    pointer-events: none;
+                    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+                    z-index: 99;
+                    animation: pulse 2s infinite alternate;
+                }
+                @keyframes pulse {
+                    0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.7; }
+                    100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 1.5, 1])
+        with col2:
+            st.markdown('<div class="camera-wrapper"><div class="target-circle"></div>', unsafe_allow_html=True)
+            img_file = st.camera_input("Verification Scanner", label_visibility="collapsed")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            if os.getenv("PLAYWRIGHT_TEST") == "1":
+                if st.button("🧪 BYPASS FACE CHECK (TEST)", use_container_width=True):
+                    st.session_state.proctoring_verified = True
+                    st.rerun()
+            
+            if img_file is not None:
+                image_bytes = img_file.getvalue()
+                
+                # Perform backend face detection using OpenCV
+                from modules.security_core import analyze_frame_opencv
+                analysis = analyze_frame_opencv(image_bytes)
+                
+                if analysis.get("person_count", 0) > 0:
+                    st.success("✅ Face Detected! Identity Verified successfully.")
+                    if st.button("PROCEED TO EXAM", use_container_width=True, type="primary"):
+                        st.session_state.proctoring_verified = True
+                        st.rerun()
+                else:
+                    st.error("❌ Face not detected. Please align your face inside the dotted circle and try again.")
+            else:
+                st.info("📸 Please snap a photo using the camera button to verify.")
+        
         return False
 
     st.sidebar.markdown(f"""

@@ -8,6 +8,7 @@ def test_full_portal_flow():
     print("🚀 Starting Streamlit server...")
     env = os.environ.copy()
     env["E2E_BYPASS_SECURITY"] = "0"  # Enable security guards for testing
+    env["PLAYWRIGHT_TEST"] = "1"      # Bypass webcam capture check
     
     server_process = subprocess.Popen(
         ["streamlit", "run", "app.py", "--server.port=8501", "--server.headless=true"],
@@ -58,18 +59,39 @@ def test_full_portal_flow():
             
             # Fill login credentials
             page.fill("input[placeholder='email@example.com']", "playwright_test@example.com")
+            page.press("input[placeholder='email@example.com']", "Enter")
+            time.sleep(1)
             page.fill("input[placeholder='••••••••'] >> nth=0", "password123")
+            page.press("input[placeholder='••••••••'] >> nth=0", "Enter")
+            time.sleep(1.5)
                 
             # Click AUTHORIZE SESSION
             print("🔑 Authorizing session...")
             page.click("text=AUTHORIZE SESSION")
             # Wait robustly for the sidebar navigation or proctoring title to render
-            page.wait_for_selector("text=AI Proctoring Sidebar", timeout=15000)
+            try:
+                page.wait_for_selector("text=AI Proctoring Sidebar", timeout=15000)
+            except Exception as e:
+                os.makedirs("tests", exist_ok=True)
+                with open("tests/failure.html", "w") as f:
+                    f.write(page.content())
+                raise e
             
             # Verify we are logged in by checking for the sidebar status
             print("✅ Login verified. Checking security sidebar...")
             sidebar_content = page.content()
             assert "AI Proctoring Sidebar" in sidebar_content or "SESSION SECURITY" in sidebar_content
+            
+            # Click BYPASS FACE CHECK (TEST) to unlock rounds
+            print("🔑 Bypassing face check for test session...")
+            try:
+                page.click("text=BYPASS FACE CHECK")
+            except Exception as e:
+                os.makedirs("tests", exist_ok=True)
+                with open("tests/failure.html", "w") as f:
+                    f.write(page.content())
+                raise e
+            time.sleep(2)
             
             # Verify round navigation
             print("🧭 Checking Sidebar navigation buttons...")
@@ -90,11 +112,6 @@ def test_full_portal_flow():
             # Navigate back to Neural Aptitude to verify tab switching security
             print("🧠 Navigating back to NEURAL APTITUDE...")
             page.click("text=🧠 NEURAL APTITUDE")
-            time.sleep(2)
-            
-            # Click VERIFY IDENTITY in sidebar
-            print("🔐 Verifying identity...")
-            page.click("text=VERIFY IDENTITY")
             time.sleep(2)
             
             # Perform tab switch simulation (Visibility Hidden)
