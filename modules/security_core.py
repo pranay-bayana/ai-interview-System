@@ -15,7 +15,7 @@ from database.init_db import get_db
 
 # --- Constants & Config ---
 MAX_TAB_SWITCHES = 5  
-MAX_VIOLATIONS = 10 # More chances due to lag
+MAX_VIOLATIONS = 5 
 REQUIRE_FULLSCREEN = True
 PROCTOR_INTERVAL_SEC = 15.0 # Standard proctoring frequency
 AI_ANALYSIS_INTERVAL = 15.0 # Balanced AI checks
@@ -361,7 +361,6 @@ def render_security_sidebar():
     if is_e2e_bypass():
         return
     
-    violations = len(st.session_state.get("security_violations", []))
     switches = st.session_state.get("tab_switch_count", 0)
     verified_label = "✅ SECURED" if st.session_state.proctoring_verified else "⏳ PENDING"
     verified_color = "#43e97b" if st.session_state.proctoring_verified else "#ffb347"
@@ -372,7 +371,6 @@ def render_security_sidebar():
             <div class="security-panel-title">Live proctoring</div>
             <div class="security-stat"><span>Status</span><strong class="{'ok' if not is_disqualified() else 'bad'}">
                 {'ACTIVE' if not is_disqualified() else 'TERMINATED'}</strong></div>
-            <div class="security-stat"><span>Violations</span><strong>{violations}/{MAX_VIOLATIONS}</strong></div>
             <div class="security-stat"><span>Tab switches</span><strong>{switches}/{MAX_TAB_SWITCHES}</strong></div>
             <div class="security-stat"><span>Identity check</span><strong style="color: {verified_color};">{verified_label}</strong></div>
         </div>

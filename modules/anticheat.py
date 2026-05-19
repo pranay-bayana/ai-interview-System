@@ -70,7 +70,7 @@ def render_sidebar_security():
                 <span style="font-size: 11px; color: #fff; font-weight: 700; opacity: 0.6;">SESSION SECURITY</span>
                 <span style="font-size: 11px; color: #6366f1; font-weight: 800;">VERIFIED</span>
             </div>
-            <div style="font-size: 10px; color: rgba(255,255,255,0.4);">Violations: {st.session_state.tab_switch_count}/{st.session_state.max_tab_switches}</div>
+            <div style="font-size: 10px; color: rgba(255,255,255,0.4);">Tab switches: {st.session_state.tab_switch_count}/{st.session_state.max_tab_switches}</div>
         </div>
     """, unsafe_allow_html=True)
     return True
