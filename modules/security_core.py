@@ -259,6 +259,7 @@ def inject_browser_guards():
             if (parentWin.__activeVisibilityListener) {
                 try {
                     parentDoc.removeEventListener('visibilitychange', parentWin.__activeVisibilityListener, true);
+                    document.removeEventListener('visibilitychange', parentWin.__activeVisibilityListener, true);
                 } catch(e) {}
             }
             if (parentWin.__activeFocusListener) {
@@ -269,15 +270,10 @@ def inject_browser_guards():
 
             // Define handlers
             const handleVisibilityChange = () => {
-                if (parentDoc.visibilityState === 'hidden') {
+                if (parentDoc.visibilityState === 'hidden' || document.visibilityState === 'hidden') {
                     console.warn("⚠️ SECURE AGENT: Visibility Hidden Detected!");
                     localStorage.setItem('pending_tab_switch', 'true');
-                    const btn = findButtonByText("hidden_tab_trigger");
-                    if (btn) {
-                        localStorage.removeItem('pending_tab_switch');
-                        forceClick(btn);
-                    }
-                } else if (parentDoc.visibilityState === 'visible') {
+                } else if (parentDoc.visibilityState === 'visible' && document.visibilityState === 'visible') {
                     triggerPendingActions();
                 }
             };
@@ -288,6 +284,7 @@ def inject_browser_guards():
 
             try {
                 parentDoc.addEventListener('visibilitychange', handleVisibilityChange, true);
+                document.addEventListener('visibilitychange', handleVisibilityChange, true);
                 parentWin.addEventListener('focus', triggerPendingActions, true);
                 console.log("🔒 JEE-MAINS SECURE PROCTORING ACTIVE WITH LIVING CONTEXT!");
                 // Trigger any pending actions immediately on load
