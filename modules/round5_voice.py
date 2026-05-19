@@ -370,13 +370,17 @@ def render_round5():
                             const targetTextArea = textareas.find(t => t.placeholder === "audio_base64_placeholder");
                             
                             if (targetTextArea) {
-                                targetTextArea.value = base64Data;
-                                const event = new Event('input', { bubbles: true });
-                                targetTextArea.dispatchEvent(event);
+                                // Trigger React's internal value setter
+                                const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+                                valueSetter.call(targetTextArea, base64Data);
+                                targetTextArea.dispatchEvent(new Event('input', { bubbles: true }));
+                                targetTextArea.dispatchEvent(new Event('change', { bubbles: true }));
                                 
                                 setTimeout(() => {
                                     const submitBtn = Array.from(parentDoc.querySelectorAll('button')).find(b => b.textContent.includes("hidden_voice_submit_btn"));
-                                    if (submitBtn) submitBtn.click();
+                                    if (submitBtn) {
+                                        submitBtn.click();
+                                    }
                                 }, 300);
                             } else {
                                 statusMsg.textContent = "Error: Input channel not found";
@@ -449,6 +453,33 @@ def render_round5():
                     x += barWidth;
                 }
             }
+
+            // Periodically check and hide hidden elements to ensure clean UI
+            function hideHiddenElements() {
+                const textareas = parentDoc.querySelectorAll('textarea');
+                textareas.forEach(ta => {
+                    if (ta.placeholder === "audio_base64_placeholder") {
+                        const wrapper = ta.closest('div[data-testid="stTextArea"]');
+                        if (wrapper && wrapper.style.display !== 'none') {
+                            wrapper.style.display = 'none';
+                        }
+                    }
+                });
+                
+                const buttons = parentDoc.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    if (btn.textContent && btn.textContent.includes("hidden_voice_submit_btn")) {
+                        const wrapper = btn.closest('div[data-testid="stButton"]');
+                        if (wrapper && wrapper.style.display !== 'none') {
+                            wrapper.style.display = 'none';
+                        }
+                    }
+                });
+            }
+            
+            // Run immediately and setup interval
+            hideHiddenElements();
+            setInterval(hideHiddenElements, 100);
         })();
         </script>
         """
