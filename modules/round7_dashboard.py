@@ -35,6 +35,18 @@ def get_candidate_performance(user_id: int) -> dict:
         return {}
 
 def render_round7():
+    # HARD SECURITY BLOCK
+    if not st.session_state.get("proctoring_verified", False):
+        st.markdown("""
+            <div class="glass-card" style="border: 2px solid #ff4b4b; background: rgba(255, 75, 75, 0.05); text-align: center; padding: 40px;">
+                <h2 style="color: #ff4b4b; margin-bottom: 20px;">📷 IDENTITY VERIFICATION REQUIRED</h2>
+                <p style="font-size: 18px; color: #fff;">To maintain interview integrity, you must verify your identity via the webcam in the sidebar before accessing this round.</p>
+                <div style="margin-top: 30px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px; font-size: 14px; color: rgba(255,255,255,0.6);">
+                    Please ensure you are alone and in a well-lit environment.
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        return
     st.markdown("""
         <div style="margin-bottom: 40px;">
             <h1 style="font-size: 44px; margin-bottom: 12px; font-weight: 900;">📊 Performance Intelligence</h1>
@@ -53,22 +65,21 @@ def render_round7():
         st.error("DATABASE_SYNC_ERROR: No intelligence vectors found.")
         return
     
-    # Accurate Total Score Calculation (Out of 60)
+    # Accurate Total Score Calculation (Out of 50)
     rounds = {
         "Resume": scores.get('round1_score', 0),
         "Aptitude": scores.get('round2_score', 0),
         "Technical": scores.get('round3_score', 0),
         "Coding": scores.get('round4_score', 0),
-        "Voice": scores.get('round5_score', 0),
-        "Chatbot": scores.get('round6_score', 0)
+        "Voice": scores.get('round5_score', 0)
     }
     
     total = sum(rounds.values())
-    max_possible = 60
+    max_possible = 50
     percentage = (total / max_possible) * 100
     
     st.markdown(f"""
-        <div class="clay-card" style="text-align: center; border-top: 8px solid var(--accent);">
+        <div class="glass-card" style="text-align: center; border-top: 8px solid var(--accent);">
             <div style="font-size: 64px; margin-bottom: 10px;">{'🏆' if total > 40 else '✨'}</div>
             <h2 style="font-size: 32px; margin-bottom: 5px;">AGGREGATE NEURAL SCORE</h2>
             <div class="metric-value" style="font-size: 84px;">{total}/{max_possible}</div>
@@ -79,7 +90,7 @@ def render_round7():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<div class="clay-card">', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.markdown("### Vector Mapping")
         df = pd.DataFrame(list(rounds.items()), columns=['Phase', 'Score'])
         fig = px.line_polar(df, r='Score', theta='Phase', line_close=True)
@@ -90,7 +101,7 @@ def render_round7():
         st.markdown('</div>', unsafe_allow_html=True)
         
     with col2:
-        st.markdown('<div class="clay-card">', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.markdown("### Phase Intelligence")
         for phase, score in rounds.items():
             color = "#43e97b" if score >= 8 else "#6366f1" if score >= 5 else "#ff6b6b"
@@ -111,3 +122,10 @@ def render_round7():
         st.success("🎉 CONGRATULATIONS: You have been identified as an ELITE CANDIDATE. Our team will contact you shortly.")
     else:
         st.info("Assessment Complete. Your performance data has been indexed for future opportunities.")
+
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+    if st.button("PROCEED TO NEURAL CHATBOT 🤖", use_container_width=True):
+        db = get_db()
+        db.client.table('candidate_status').update({'current_round': 6}).eq('user_id', user_id).execute()
+        st.session_state.current_round = 6
+        st.rerun()

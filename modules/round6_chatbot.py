@@ -5,8 +5,7 @@ World-Class Neural Assistant with Robust Fallback Intelligence
 
 import streamlit as st
 from database.init_db import get_db
-from openai import OpenAI
-import os
+import requests
 
 # Local Intelligence Database for Offline Mode
 OFFLINE_KNOWLEDGE = {
@@ -24,19 +23,18 @@ def get_ai_response(messages):
     """Get intelligent response with robust fallback"""
     user_msg = messages[-1]['content'].lower()
     
-    # Try OpenAI first
-    api_key = os.getenv('OPENAI_API_KEY')
-    if api_key and "your_key" not in api_key:
-        try:
-            client = OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": "You are a professional AI Recruitment Assistant."}] + messages,
-                max_tokens=200
-            )
-            return response.choices[0].message.content
-        except Exception:
-            pass # Fallback to local intelligence
+    # Try Ollama local LLM first (using llava as requested)
+    try:
+        res = requests.post('http://localhost:11434/api/chat', json={
+            "model": "llava",
+            "messages": [{"role": "system", "content": "You are a professional AI Recruitment Assistant."}] + messages,
+            "stream": False
+        }, timeout=10)
+        
+        if res.status_code == 200:
+            return res.json().get('message', {}).get('content', '')
+    except Exception:
+        pass # Fallback to local intelligence
             
     # Local Intelligence Fallback
     for key, value in OFFLINE_KNOWLEDGE.items():
@@ -48,10 +46,23 @@ def get_ai_response(messages):
 def render_round6():
     st.markdown("""
         <div style="margin-bottom: 40px;">
-            <h1 style="font-size: 44px; margin-bottom: 12px; font-weight: 900;">🤖 Round 06: Neural Assistant</h1>
-            <p style="color: var(--text-secondary); font-size: 20px;">Real-time strategic briefing and cognitive performance optimization.</p>
+            <h1 style="font-size: 44px; margin-bottom: 12px; font-weight: 900;">🤖 Neural Assistant</h1>
+            <p style="color: var(--text-secondary); font-size: 20px;">Real-time strategic briefing and cognitive performance optimization. (No Impact on Score)</p>
         </div>
     """, unsafe_allow_html=True)
+    
+    # HARD SECURITY BLOCK (Re-applied as requested)
+    if not st.session_state.get("proctoring_verified", False):
+        st.markdown("""
+            <div class="glass-card" style="border: 2px solid #ff4b4b; background: rgba(255, 75, 75, 0.05); text-align: center; padding: 40px;">
+                <h2 style="color: #ff4b4b; margin-bottom: 20px;">📷 IDENTITY VERIFICATION REQUIRED</h2>
+                <p style="font-size: 18px; color: #fff;">To maintain interview integrity, you must verify your identity via the webcam in the sidebar before accessing this round.</p>
+                <div style="margin-top: 30px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px; font-size: 14px; color: rgba(255,255,255,0.6);">
+                    Please ensure you are alone and in a well-lit environment.
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        return
     
     user = st.session_state.get('user', {})
     user_id = user.get('id', 0)
@@ -75,9 +86,9 @@ def render_round6():
             
             st.markdown(f"""
                 <div style="display: flex; justify-content: {align}; margin-bottom: 20px;">
-                    <div class="clay-card" style="padding: 15px 25px; max-width: 75%; background: {bg}; 
-                                border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); 
-                                box-shadow: {glow}; position: relative;">
+                    <div class="glass-card" style="padding: 15px 25px; max-width: 75%; background: {bg}; 
+                                 border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); 
+                                 box-shadow: {glow}; position: relative;">
                         <div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-bottom: 5px; font-weight: 800;">
                             { 'CANDIDATE' if is_user else 'NEURAL_CORE' }
                         </div>
@@ -89,19 +100,19 @@ def render_round6():
     # Chat Input
     if prompt := st.chat_input("TRANSMIT COMMAND..."):
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        
         with st.spinner("Decoding neural vectors..."):
             ai_resp = get_ai_response(st.session_state.chat_messages)
             st.session_state.chat_messages.append({"role": "assistant", "content": ai_resp})
-        
         st.rerun()
 
     # Completion Button
     if len(st.session_state.chat_messages) > 1:
         st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
-        if st.button("🏁 FINALIZE STRATEGIC BRIEFING", use_container_width=True):
+        if not st.session_state.get("proctoring_verified", False):
+            st.warning("⚠️ Identity verification required (via sidebar) to proceed.")
+            st.button("🏁 FINALIZE & PROCEED TO DASHBOARD →", type="primary", use_container_width=True, disabled=True)
+        elif st.button("🏁 PROCEED TO DASHBOARD →", type="primary", use_container_width=True):
             db = get_db()
-            db.client.table('candidate_scores').update({'round6_score': 10}).eq('user_id', user_id).execute()
-            db.client.table('candidate_status').update({'current_round': 6}).eq('user_id', user_id).execute()
-            st.session_state.current_round = 6
+            db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
+            st.session_state.current_round = 5
             st.rerun()

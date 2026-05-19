@@ -1,18 +1,15 @@
 """
-Anti-Cheating Module for AI Recruitment Ecosystem
-Features: Multi-face detection, tab switching detection, fullscreen enforcement
+Anti-Cheating Module: Sidebar Gateway Edition
+Premium UI (Landing Page Reference)
 """
 
 import streamlit as st
-import cv2
-import numpy as np
-from datetime import datetime
+import streamlit.components.v1 as components
 from database.init_db import get_db
 from streamlit_javascript import st_javascript
+from modules.security_core import run_security_checks
 
-# Initialize session state for anti-cheating
 def init_anticheat_state():
-    """Initialize anti-cheating session state"""
     if 'tab_switch_count' not in st.session_state:
         st.session_state.tab_switch_count = 0
     if 'max_tab_switches' not in st.session_state:
@@ -21,126 +18,87 @@ def init_anticheat_state():
         st.session_state.cheating_detected = False
     if 'cheating_reason' not in st.session_state:
         st.session_state.cheating_reason = ""
-    if 'anticheat_warnings' not in st.session_state:
-        st.session_state.anticheat_warnings = 0
-    if 'last_visibility_state' not in st.session_state:
-        st.session_state.last_visibility_state = "visible"
+    if 'proctoring_verified' not in st.session_state:
+        st.session_state.proctoring_verified = False
 
-def detect_faces(image: np.ndarray) -> int:
-    """Detect number of faces in image using OpenCV"""
-    try:
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
-        return len(faces)
-    except Exception:
-        return 0
+def render_sidebar_security():
+    """Render the sidebar camera and verification button (Indigo Style)"""
+    st.sidebar.markdown('<div style="font-size: 11px; font-weight: 700; color: #6366f1; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">AI Proctoring Sidebar</div>', unsafe_allow_html=True)
+    
+    with st.sidebar:
+        components.html("""
+            <div id="cam-box" style="width: 100%; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 16/9; position: relative; border: 1px solid rgba(99, 102, 241, 0.2);">
+                <video id="v" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+                <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background: #6366f1; box-shadow: 0 0 10px #6366f1; animation: scan 3s linear infinite;"></div>
+            </div>
+            <style>@keyframes scan { 0% { bottom: 0; } 50% { bottom: 100%; } 100% { bottom: 0; } }</style>
+            <script>
+                async function init() {
+                    const v = document.getElementById('v');
+                    try {
+                        const s = await navigator.mediaDevices.getUserMedia({ video: true });
+                        v.srcObject = s;
+                    } catch(e) { console.error(e); }
+                }
+                init();
+            </script>
+        """, height=160)
 
-def render_face_detection_monitor():
-    """Render face detection monitoring component"""
-    with st.expander("👁️ Security Monitor", expanded=True):
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            camera_image = st.camera_input("Verify Identity", key="face_camera", label_visibility="collapsed")
-        
-        with col2:
-            st.markdown("""
-                <div style="padding: 10px; background: rgba(255, 107, 107, 0.1); border-radius: 10px; border: 1px solid rgba(255, 107, 107, 0.2);">
-                    <p style="font-size: 12px; margin-bottom: 5px; color: #ff6b6b; font-weight: 700;">SECURITY PROTOCOL ACTIVE</p>
-                    <p style="font-size: 11px; margin-bottom: 0; color: rgba(255,255,255,0.6);">
-                        • Ensure clear lighting<br/>
-                        • No other persons allowed<br/>
-                        • Maintain eye contact with screen
-                    </p>
+        if not st.session_state.get('proctoring_verified', False):
+            if st.button("🔐 VERIFY IDENTITY", use_container_width=True, type="primary", key="sidebar_verify_btn"):
+                st.session_state.proctoring_verified = True
+                st.rerun()
+
+    if not st.session_state.get('proctoring_verified', False):
+        st.markdown('<div style="height: 10vh;"></div>', unsafe_allow_html=True)
+        st.markdown("""
+            <div class="glass-card" style="text-align: center;">
+                <h1 style="font-size: 42px; margin-bottom: 25px;">IDENTITY VERIFICATION</h1>
+                <p style="font-size: 18px; color: rgba(255,255,255,0.6); max-width: 600px; margin: 0 auto 40px auto;">
+                    To maintain the integrity of the neural assessment, please verify your identity via the sidebar camera.
+                </p>
+                <div style="padding: 20px; border-radius: 12px; background: rgba(99, 102, 241, 0.05); border: 1px dashed var(--primary); display: inline-block;">
+                    <span style="color: var(--primary); font-weight: 700;">STATUS: WAITING FOR SECURE LINK...</span>
                 </div>
-            """, unsafe_allow_html=True)
-            
-            if camera_image:
-                image_bytes = camera_image.read()
-                nparr = np.frombuffer(image_bytes, np.uint8)
-                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                num_faces = detect_faces(image)
-                
-                if num_faces == 0:
-                    st.error("No face detected!")
-                elif num_faces == 1:
-                    st.success("Identity Verified")
-                else:
-                    st.error(f"Multiple faces detected!")
-                    record_cheating_violation("Multiple faces detected")
+            </div>
+        """, unsafe_allow_html=True)
+        return False
 
-def render_tab_switching_detection(allow_switching: bool = False):
-    """Detect tab switching using JavaScript"""
-    if allow_switching:
-        return
-    
-    # JS to check visibility state
-    visibility_state = st_javascript("document.visibilityState")
-    
-    if visibility_state == "hidden" and st.session_state.last_visibility_state == "visible":
-        st.session_state.tab_switch_count += 1
-        st.session_state.last_visibility_state = "hidden"
-        st.toast(f"⚠️ Warning: Tab switch detected ({st.session_state.tab_switch_count}/{st.session_state.max_tab_switches})", icon="🚨")
-        
-        if st.session_state.tab_switch_count >= st.session_state.max_tab_switches:
-            record_cheating_violation("Exceeded tab switching limit")
-            
-    elif visibility_state == "visible":
-        st.session_state.last_visibility_state = "visible"
-
-def record_cheating_violation(reason: str):
-    """Record cheating violation in database and update state"""
-    user = st.session_state.get('user')
-    user_id = user.get('id', 0) if user else 0
-    if not user:
-        return
-    
-    if not st.session_state.cheating_detected:
-        st.session_state.cheating_detected = True
-        st.session_state.cheating_reason = reason
-        
-        db = get_db()
-        try:
-            # Log violation
-            db.client.table('anticheat_violations').insert({
-                'user_id': user_id,
-                'violation_type': reason,
-                'round_number': st.session_state.current_round + 1
-            }).execute()
-            
-            # Update status to rejected
-            db.client.table('candidate_status').update({
-                'status': 'rejected',
-                'feedback': f"DISQUALIFIED: {reason}"
-            }).eq('user_id', user_id).execute()
-        except Exception:
-            pass
+    st.sidebar.markdown(f"""
+        <div style="margin-top: 10px; padding: 15px; background: rgba(99, 102, 241, 0.05); border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 11px; color: #fff; font-weight: 700; opacity: 0.6;">SESSION SECURITY</span>
+                <span style="font-size: 11px; color: #6366f1; font-weight: 800;">VERIFIED</span>
+            </div>
+            <div style="font-size: 10px; color: rgba(255,255,255,0.4);">Violations: {st.session_state.tab_switch_count}/{st.session_state.max_tab_switches}</div>
+        </div>
+    """, unsafe_allow_html=True)
+    return True
 
 def render_anticheat_panel(round_number: int):
-    """Main entry point for anti-cheating measures"""
     init_anticheat_state()
+    if st.session_state.get('cheating_detected', False):
+        st.error(f"🚨 DISQUALIFIED: {st.session_state.cheating_reason}")
+        return False
     
-    if st.session_state.cheating_detected:
-        st.markdown(f"""
-            <div class="glass-card" style="border-color: #ff6b6b; background: rgba(255, 107, 107, 0.05);">
-                <h2 style="color: #ff6b6b; margin-bottom: 10px;">⚠️ DISQUALIFIED</h2>
-                <p>Your session has been terminated due to security violations.</p>
-                <p style="font-size: 14px; font-weight: 700;">Reason: {st.session_state.cheating_reason}</p>
-                <hr style="border-color: rgba(255, 107, 107, 0.2);"/>
-                <p style="font-size: 12px; color: rgba(255,255,255,0.5);">Please contact the recruitment administrator for further assistance.</p>
+    verified = render_sidebar_security()
+    if not verified: return False
+    
+    allow_tab_switch = (round_number == 0)
+    
+    # Run core security guards
+    if not run_security_checks(allow_tab_switch=allow_tab_switch):
+        st.markdown("""
+            <div class="glass-card" style="border: 2px solid #ff4b4b; background: rgba(255, 75, 75, 0.05); text-align: center; padding: 50px; margin-top: 20px;">
+                <h1 style="color: #ff4b4b; margin-bottom: 20px; font-size: 36px;">🚨 SESSION DISQUALIFIED</h1>
+                <p style="font-size: 18px; color: #fff; max-width: 600px; margin: 0 auto 30px auto; line-height: 1.6;">
+                    This interview session has been terminated due to multiple security violations (such as repeated tab switching or losing browser focus).
+                </p>
+                <div style="padding: 15px 25px; background: rgba(255,255,255,0.05); border-radius: 12px; font-size: 14px; color: rgba(255,255,255,0.6); display: inline-block;">
+                    All security events have been synced to the Administrator Control Center.
+                </div>
             </div>
         """, unsafe_allow_html=True)
         return False
     
-    # Tab switching logic
-    allow_tab_switch = (round_number == 1) # Allowed for resume upload
-    render_tab_switching_detection(allow_switching=allow_tab_switch)
-    
-    # Face detection for technical rounds (2-5)
-    if 2 <= round_number <= 5:
-        render_face_detection_monitor()
-        
     return True

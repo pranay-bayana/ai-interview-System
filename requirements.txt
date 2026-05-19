@@ -15,3 +15,4 @@ streamlit-javascript==0.1.5
 pytest
 playwright
 pytest-playwright
+pdfplumber

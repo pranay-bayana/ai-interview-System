@@ -50,7 +50,7 @@ def calculate_aptitude_score(user_answers: dict) -> int:
     for q in APTITUDE_QUESTIONS:
         if user_answers.get(q['id']) == q['correct']:
             correct_count += 1
-    return correct_count
+    return correct_count * 2
 
 def save_aptitude_answers(user_id: int, user_answers: dict, score: int):
     db = get_db()
@@ -74,6 +74,18 @@ def save_aptitude_answers(user_id: int, user_answers: dict, score: int):
         return False
 
 def render_round2():
+    # HARD SECURITY BLOCK
+    if not st.session_state.get("proctoring_verified", False):
+        st.markdown("""
+            <div class="glass-card" style="border: 2px solid #ff4b4b; background: rgba(255, 75, 75, 0.05); text-align: center; padding: 40px;">
+                <h2 style="color: #ff4b4b; margin-bottom: 20px;">📷 IDENTITY VERIFICATION REQUIRED</h2>
+                <p style="font-size: 18px; color: #fff;">To maintain interview integrity, you must verify your identity via the webcam in the sidebar before accessing this round.</p>
+                <div style="margin-top: 30px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px; font-size: 14px; color: rgba(255,255,255,0.6);">
+                    Please ensure you are alone and in a well-lit environment.
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        return
     st.markdown("""
         <div style="margin-bottom: 40px;">
             <h1 style="font-size: 40px; margin-bottom: 12px;">🧠 Round 02: Cognitive Evaluation</h1>
@@ -92,7 +104,7 @@ def render_round2():
     if existing.data:
         correct = sum(1 for ans in existing.data if ans.get('is_correct', False))
         st.markdown(f"""
-            <div class="clay-card" style="text-align: center;">
+            <div class="glass-card" style="text-align: center;">
                 <h2 style="color: var(--accent); margin-bottom: 20px;">COGNITIVE PROFILE SYNCED</h2>
                 <div class="metric-value" style="font-size: 72px;">{correct}/05</div>
                 <p style="color: var(--text-secondary); margin-top: 10px;">Your analytical vectors have been validated and indexed.</p>
@@ -107,16 +119,48 @@ def render_round2():
         if 'user_answers' not in st.session_state: st.session_state.user_answers = {}
         if 'apt_start_time' not in st.session_state: st.session_state.apt_start_time = time.time()
         
-        # Timer
+        # Dynamic JavaScript Real-Time Timer
+        import streamlit.components.v1 as components
         elapsed = int(time.time() - st.session_state.apt_start_time)
         remaining = max(0, 600 - elapsed)
-        st.markdown(f"""
-            <div style="text-align: right; margin-bottom: 20px;">
-                <span style="background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: 700;">
-                    ⏳ TIME REMAINING: {remaining//60:02d}:{remaining%60:02d}
+        
+        timer_html = f"""
+            <div id="countdown-timer-container" style="text-align: right; margin-bottom: 20px; font-family: sans-serif;">
+                <span id="countdown-timer" style="background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: 700; color: #fff; font-size: 14px;">
+                    ⏳ TIME REMAINING: --:--
                 </span>
             </div>
-        """, unsafe_allow_html=True)
+            <script>
+                (function() {{
+                    const startTime = {st.session_state.apt_start_time} * 1000;
+                    const duration = 600 * 1000; // 10 minutes
+                    const timerSpan = document.getElementById("countdown-timer");
+                    
+                    function update() {{
+                        const now = Date.now();
+                        const elapsed = now - startTime;
+                        const remaining = Math.max(0, duration - elapsed);
+                        
+                        const totalSecs = Math.floor(remaining / 1000);
+                        const mins = Math.floor(totalSecs / 60).toString().padStart(2, '0');
+                        const secs = Math.floor(totalSecs % 60).toString().padStart(2, '0');
+                        
+                        timerSpan.textContent = `⏳ TIME REMAINING: ${{mins}}:${{secs}}`;
+                        
+                        if (remaining <= 0) {{
+                            clearInterval(timerInterval);
+                            const parentButtons = Array.from(window.parent.document.querySelectorAll('button'));
+                            const submitBtn = parentButtons.find(b => b.textContent.includes("SUBMIT PROFILE"));
+                            if (submitBtn) submitBtn.click();
+                        }}
+                    }}
+                    
+                    update();
+                    const timerInterval = setInterval(update, 1000);
+                }})();
+            </script>
+        """
+        components.html(timer_html, height=45)
         
         curr_q = APTITUDE_QUESTIONS[st.session_state.apt_q_idx]
         

@@ -14,6 +14,7 @@ def hash_password(password: str) -> str:
 
 def signup_user(email: str, password: str, full_name: str) -> dict:
     """Register a new candidate"""
+    email = email.strip().lower()
     db = get_db()
     try:
         existing = db.client.table('users').select('*').eq('email', email).execute()
@@ -39,15 +40,22 @@ def signup_user(email: str, password: str, full_name: str) -> dict:
 
 def login_user(email: str, password: str) -> dict:
     """Login a user"""
+    email = email.strip().lower()
     db = get_db()
     try:
-        password_hash = hash_password(password)
-        result = db.client.table('users').select('*').eq('email', email).eq('password_hash', password_hash).execute()
+        result = db.client.table('users').select('*').eq('email', email).execute()
         
-        if result.data:
-            return {'success': True, 'user': result.data[0], 'message': 'Login successful'}
-        else:
+        if not result.data:
             return {'success': False, 'message': 'Invalid email or password'}
+            
+        user = result.data[0]
+        stored_hash = user.get('password_hash', '')
+        
+        # Standard SHA-256 validation
+        if stored_hash == hash_password(password):
+            return {'success': True, 'user': user, 'message': 'Login successful'}
+            
+        return {'success': False, 'message': 'Invalid email or password'}
     except Exception as e:
         return {'success': False, 'message': f'Login failed: {str(e)}'}
 
@@ -69,7 +77,7 @@ def render_auth_page():
     col1, col2, col3 = st.columns([1, 1.5, 1])
     
     with col2:
-        tab1, tab2 = st.tabs(["🔐 SECURE LOGIN", "📝 QUICK SIGNUP"])
+        tab1, tab2, tab3 = st.tabs(["🔐 SECURE LOGIN", "📝 QUICK SIGNUP", "👑 ADMIN OVERRIDE"])
         
         with tab1:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -108,6 +116,27 @@ def render_auth_page():
                     st.error("Please fill all fields")
             st.markdown('</div>', unsafe_allow_html=True)
 
+        with tab3:
+            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+            access_key = st.text_input("ENTER ACCESS PROTOCOL KEY", type="password", placeholder="••••••••", help="Enter the master administrator key.", key="admin_override_key")
+            
+            if st.button("INITIATE OVERRIDE ⚡", use_container_width=True, key="admin_override_btn"):
+                if verify_admin_access(access_key):
+                    st.session_state.is_admin = True
+                    st.session_state.admin_verified = True
+                    st.session_state.authenticated = True
+                    st.session_state.user = {
+                        'id': 'ADMIN',
+                        'full_name': 'System Administrator',
+                        'email': 'admin@neural.core',
+                        'role': 'admin'
+                    }
+                    st.success("Access Granted. Synchronizing Control Center...")
+                    st.rerun()
+                else:
+                    st.error("INVALID ACCESS PROTOCOL. INCIDENT LOGGED.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
 def render_admin_access():
     """Render Hyper-Futuristic Admin Access Portal"""
     st.markdown("""
@@ -120,7 +149,7 @@ def render_admin_access():
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown('<div class="clay-card">', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         access_key = st.text_input("ENTER ACCESS PROTOCOL KEY", type="password", placeholder="••••••••", help="Enter the master administrator key.")
         
         if st.button("INITIATE OVERRIDE ⚡", use_container_width=True):

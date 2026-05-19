@@ -30,8 +30,8 @@ def get_all_candidates() -> list:
             r_res = db.client.table('resumes').select('*').eq('user_id', uid).execute()
             resume = r_res.data[0] if r_res.data else {}
             
-            # Calculate total (out of 60)
-            total = sum([s.get(f'round{i}_score', 0) for i in range(1, 7)])
+            # Calculate total (out of 50)
+            total = sum([s.get(f'round{i}_score', 0) for i in range(1, 6)])
             
             candidates.append({
                 'id': uid,
@@ -72,16 +72,16 @@ def render_admin_dashboard():
     # Premium Neural Metrics
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown(f'<div class="clay-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px;">TOTAL ENTITIES</div><div class="metric-value" style="font-size: 48px;">{len(df)}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px;">TOTAL ENTITIES</div><div class="metric-value" style="font-size: 48px;">{len(df)}</div></div>', unsafe_allow_html=True)
     with col2:
         cleared = len(df[df["status"]=="selected"])
-        st.markdown(f'<div class="clay-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px; color: var(--accent);">CLEARED</div><div class="metric-value" style="font-size: 48px; color: var(--accent);">{cleared}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px; color: var(--accent);">CLEARED</div><div class="metric-value" style="font-size: 48px; color: var(--accent);">{cleared}</div></div>', unsafe_allow_html=True)
     with col3:
         pending = len(df[df["status"]=="pending"])
-        st.markdown(f'<div class="clay-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px;">EVALUATING</div><div class="metric-value" style="font-size: 48px;">{pending}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px;">EVALUATING</div><div class="metric-value" style="font-size: 48px;">{pending}</div></div>', unsafe_allow_html=True)
     with col4:
         flagged = len(df[df["status"]=="rejected"])
-        st.markdown(f'<div class="clay-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px; color: #ff6b6b;">FLAGGED</div><div class="metric-value" style="font-size: 48px; color: #ff6b6b;">{flagged}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card" style="text-align: center; padding: 20px;"><div style="font-size: 10px; letter-spacing: 2px; color: #ff6b6b;">FLAGGED</div><div class="metric-value" style="font-size: 48px; color: #ff6b6b;">{flagged}</div></div>', unsafe_allow_html=True)
     
     st.markdown('<div style="height: 50px;"></div>', unsafe_allow_html=True)
     
@@ -89,7 +89,7 @@ def render_admin_dashboard():
     for _, candidate in df.iterrows():
         status_color = "var(--accent)" if candidate['status'] == "selected" else "#ff6b6b" if candidate['status'] == "rejected" else "white"
         
-        with st.expander(f"ENTITY: {candidate['name'].upper()} | AGGREGATE SCORE: {candidate['total_score']}/60 | STATUS: {candidate['status'].upper()}", expanded=False):
+        with st.expander(f"ENTITY: {candidate['name'].upper()} | AGGREGATE SCORE: {candidate['total_score']}/50 | STATUS: {candidate['status'].upper()}", expanded=False):
             st.markdown('<div style="padding: 20px;">', unsafe_allow_html=True)
             c1, c2, c3 = st.columns([1.5, 1, 1])
             with c1:

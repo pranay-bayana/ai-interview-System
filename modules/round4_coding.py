@@ -62,6 +62,18 @@ def save_coding_submission(user_id: int, language: str, code: str, passed: int, 
         return False
 
 def render_round4():
+    # HARD SECURITY BLOCK
+    if not st.session_state.get("proctoring_verified", False):
+        st.markdown("""
+            <div class="glass-card" style="border: 2px solid #ff4b4b; background: rgba(255, 75, 75, 0.05); text-align: center; padding: 40px;">
+                <h2 style="color: #ff4b4b; margin-bottom: 20px;">📷 IDENTITY VERIFICATION REQUIRED</h2>
+                <p style="font-size: 18px; color: #fff;">To maintain interview integrity, you must verify your identity via the webcam in the sidebar before accessing this round.</p>
+                <div style="margin-top: 30px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px; font-size: 14px; color: rgba(255,255,255,0.6);">
+                    Please ensure you are alone and in a well-lit environment.
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        return
     st.markdown("""
         <div style="margin-bottom: 40px;">
             <h1 style="font-size: 40px; margin-bottom: 12px;">⌨️ Round 04: Algorithmic Engineering</h1>
@@ -80,7 +92,7 @@ def render_round4():
         sub = existing.data[0]
         score = sub.get('score', 0)
         st.markdown(f"""
-            <div class="clay-card" style="text-align: center;">
+            <div class="glass-card" style="text-align: center;">
                 <h2 style="color: var(--accent); margin-bottom: 20px;">ALGORITHM DEPLOYED</h2>
                 <div class="metric-value" style="font-size: 72px;">{score}/10</div>
                 <p style="color: var(--text-secondary); margin-top: 10px;">Verification successful against all high-priority test vectors.</p>
@@ -94,7 +106,7 @@ def render_round4():
         lang = st.selectbox("COMPILER ARCHITECTURE:", ['python', 'java', 'cpp'], format_func=lambda x: x.upper())
         
         st.markdown(f"""
-            <div class="clay-card" style="margin-bottom: 30px; border-left: 5px solid var(--accent);">
+            <div class="glass-card" style="margin-bottom: 30px; border-left: 5px solid var(--accent);">
                 <h3>{CODING_CHALLENGE['title']}</h3>
                 <p style="color: var(--text-secondary); margin-top: 10px;">{CODING_CHALLENGE['description']}</p>
             </div>
