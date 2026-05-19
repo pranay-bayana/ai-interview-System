@@ -243,7 +243,6 @@ def inject_browser_guards():
 
             // Clear any stale flags from previous unmonitored sessions on load
             localStorage.removeItem('pending_tab_switch');
-            localStorage.removeItem('pending_blur');
 
             // --- SECURE PROCTORING SINGLETON SCRIPT INJECTION ---
             const triggerPendingActions = () => {
@@ -254,24 +253,12 @@ def inject_browser_guards():
                         forceClick(btn);
                     }
                 }
-                if (localStorage.getItem('pending_blur') === 'true') {
-                    const btn = findButtonByText("hidden_blur_trigger");
-                    if (btn) {
-                        localStorage.removeItem('pending_blur');
-                        forceClick(btn);
-                    }
-                }
             };
 
             // Clean up previous event listeners if they exist to prevent dead object references
             if (parentWin.__activeVisibilityListener) {
                 try {
                     parentDoc.removeEventListener('visibilitychange', parentWin.__activeVisibilityListener, true);
-                } catch(e) {}
-            }
-            if (parentWin.__activeBlurListener) {
-                try {
-                    parentWin.removeEventListener('blur', parentWin.__activeBlurListener, true);
                 } catch(e) {}
             }
             if (parentWin.__activeFocusListener) {
@@ -295,24 +282,12 @@ def inject_browser_guards():
                 }
             };
 
-            const handleBlur = () => {
-                console.warn("⚠️ SECURE AGENT: Window Blur Detected!");
-                localStorage.setItem('pending_blur', 'true');
-                const btn = findButtonByText("hidden_blur_trigger");
-                if (btn) {
-                    localStorage.removeItem('pending_blur');
-                    forceClick(btn);
-                }
-            };
-
             // Save reference and attach fresh listeners
             parentWin.__activeVisibilityListener = handleVisibilityChange;
-            parentWin.__activeBlurListener = handleBlur;
             parentWin.__activeFocusListener = triggerPendingActions;
 
             try {
                 parentDoc.addEventListener('visibilitychange', handleVisibilityChange, true);
-                parentWin.addEventListener('blur', handleBlur, true);
                 parentWin.addEventListener('focus', triggerPendingActions, true);
                 console.log("🔒 JEE-MAINS SECURE PROCTORING ACTIVE WITH LIVING CONTEXT!");
                 // Trigger any pending actions immediately on load
@@ -359,7 +334,6 @@ def inject_browser_guards():
                 buttons.forEach(btn => {
                     const txt = btn.textContent || "";
                     if (txt.includes("hidden_tab_trigger") || 
-                        txt.includes("hidden_blur_trigger") || 
                         txt.includes("hidden_devtools_trigger") ||
                         txt.includes("hidden_proctor_trigger")) {
                         
@@ -440,12 +414,6 @@ def run_security_checks(allow_tab_switch: bool = False) -> bool:
         if not allow_tab_switch:
             st.session_state.tab_switch_count += 1
             log_violation("Critical: Tab Switch Detected (Visibility Hidden)")
-            st.rerun()
-
-    if st.button("hidden_blur_trigger"):
-        if not allow_tab_switch:
-            st.session_state.tab_switch_count += 1
-            log_violation("Critical: Browser Lost Focus (Blur Event)")
             st.rerun()
 
     # The live camera in the sidebar now handles all background proctoring.

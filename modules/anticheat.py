@@ -13,7 +13,7 @@ def init_anticheat_state():
     if 'tab_switch_count' not in st.session_state:
         st.session_state.tab_switch_count = 0
     if 'max_tab_switches' not in st.session_state:
-        st.session_state.max_tab_switches = 3
+        st.session_state.max_tab_switches = 5
     if 'cheating_detected' not in st.session_state:
         st.session_state.cheating_detected = False
     if 'cheating_reason' not in st.session_state:
