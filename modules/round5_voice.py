@@ -4,10 +4,7 @@ Voice capture with real-time transcription and AI-powered evaluation
 """
 
 import streamlit as st
-import sounddevice as sd
-import soundfile as sf
 import numpy as np
-import tempfile
 import os
 from database.init_db import get_db
 from openai import OpenAI
@@ -19,59 +16,26 @@ HR_QUESTIONS = [
     "What are your greatest strengths and weaknesses?"
 ]
 
-def start_asynchronous_recording(max_duration: int = 30, sample_rate: int = 44100):
-    """Start recording asynchronously using sounddevice"""
-    try:
-        st.session_state.recording_start_time = time.time()
-        st.session_state.max_duration = max_duration
-        st.session_state.sample_rate = sample_rate
-        st.session_state.audio_buffer = sd.rec(int(max_duration * sample_rate), samplerate=sample_rate, channels=1)
-        st.session_state.is_recording = True
-        return True
-    except Exception as e:
-        st.error(f"Hardware Error: {str(e)}")
-        return False
-
-def stop_asynchronous_recording():
-    """Stop active sounddevice recording and return cropped buffer"""
-    try:
-        sd.stop()
-        elapsed = time.time() - st.session_state.recording_start_time
-        # Clamp duration
-        elapsed = min(st.session_state.max_duration, max(1, int(elapsed)))
-        
-        sample_rate = st.session_state.sample_rate
-        recorded_frames = int(elapsed * sample_rate)
-        audio_data = st.session_state.audio_buffer[:recorded_frames]
-        
-        st.session_state.is_recording = False
-        return audio_data, sample_rate, True
-    except Exception as e:
-        st.error(f"Error stopping recording: {str(e)}")
-        st.session_state.is_recording = False
-        return None, None, False
-
-def transcribe_audio(audio_data, sample_rate: int) -> str:
-    """Transcribe audio with robust fallback"""
+def transcribe_audio(audio_bytes: bytes) -> str:
+    """Transcribe WebM/WAV audio bytes with robust fallback"""
     try:
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key or "your_key" in api_key:
             return "The candidate provided a structured and confident response regarding their professional journey and project experience."
             
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-            temp_file = f.name
-            sf.write(temp_file, audio_data, sample_rate)
-        
+        import io
         client = OpenAI(api_key=api_key)
-        with open(temp_file, 'rb') as audio_file:
-            transcription = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                response_format="text"
-            )
-        os.unlink(temp_file)
+        audio_file = io.BytesIO(audio_bytes)
+        audio_file.name = "audio.webm"  # Whisper determines format from filename extension
+        
+        transcription = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="text"
+        )
         return transcription
-    except Exception:
+    except Exception as e:
+        print(f"Transcription error: {e}")
         return "The candidate discussed their technical skills, problem-solving approach, and career goals with clarity."
 
 def evaluate_response(question: str, response: str) -> int:
@@ -200,78 +164,255 @@ def render_round5():
             </div>
         """, unsafe_allow_html=True)
         
-        # Check if currently actively recording
-        if st.session_state.get("is_recording", False):
-            st.markdown(f"""
-                <div class="glass-card" style="text-align: center; border: 2px solid #ff6b6b; background: rgba(255, 107, 107, 0.05); margin-bottom: 20px;">
-                    <div style="font-size: 36px; color: #ff6b6b; font-weight: 900; animation: pulse 1.5s infinite;">🎤 RECORDING ACTIVE</div>
-                    <p style="color: var(--text-secondary); font-size: 16px; margin-top: 10px;">
-                        Speak clearly into your microphone. Click the button below when your answer is complete!
-                    </p>
-                </div>
-                <style>
-                @keyframes pulse {{
-                    0% {{ opacity: 0.6; }}
-                    50% {{ opacity: 1; }}
-                    100% {{ opacity: 0.6; }}
-                }}
-                </style>
-            """, unsafe_allow_html=True)
+        # Hide the text area and submit button using CSS
+        st.markdown("""
+            <style>
+            div[data-testid="stTextArea"] {
+                position: absolute !important;
+                width: 1px !important;
+                height: 1px !important;
+                padding: 0 !important;
+                margin: -1px !important;
+                overflow: hidden !important;
+                clip: rect(0, 0, 0, 0) !important;
+                border: 0 !important;
+                opacity: 0.01 !important;
+            }
+            div[data-testid="stButton"] button:has(div:contains("hidden_voice_submit_btn")) {
+                display: none !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # Hidden text area to capture base64 audio data from the browser
+        audio_base64 = st.text_area(
+            "audio_base64_data",
+            value="",
+            placeholder="audio_base64_placeholder",
+            label_visibility="collapsed",
+            key="audio_base64_data"
+        )
+        
+        # Hidden submit button to trigger processing
+        voice_submit = st.button("hidden_voice_submit_btn")
+        
+        if voice_submit and audio_base64:
+            import base64
+            audio_bytes = base64.b64decode(audio_base64)
             
-            elapsed = int(time.time() - st.session_state.recording_start_time)
-            remaining = max(0, 30 - elapsed)
-            
-            st.progress(min(1.0, elapsed / 30.0))
-            st.markdown(f"<div style='text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px;'>⏱️ {remaining}s remaining (Max duration: 30s)</div>", unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                # Manual stop button
-                stop_clicked = st.button("⏹️ STOP & SUBMIT ANSWER", use_container_width=True, type="primary")
-            
-            if stop_clicked or remaining <= 0:
-                audio_data, sample_rate, success = stop_asynchronous_recording()
+            with st.spinner("Decoding vocal spectrum..."):
+                trans = transcribe_audio(audio_bytes)
+                score = evaluate_response(question, trans)
                 
-                if success:
-                    # Robust volume check (Root Mean Square) to detect if candidate actually spoke
-                    rms = np.sqrt(np.mean(audio_data**2)) if audio_data is not None else 0
-                    
-                    if rms < 0.008:
-                        st.error(f"🚨 Silence Detected! No voice input was captured (Captured Volume: {rms:.5f}, Target: >= 0.008). Please speak louder, adjust your microphone, and try again.")
-                    else:
-                        with st.spinner("Decoding vocal spectrum..."):
-                            trans = transcribe_audio(audio_data, sample_rate)
-                            score = evaluate_response(question, trans)
-                            
-                            db.client.table('hr_voice_transcriptions').insert({
-                                'user_id': user_id,
-                                'question': question,
-                                'transcription': trans,
-                                'score': score 
-                            }).execute()
-                            
-                            st.session_state.last_transcription = trans
-                            st.session_state.last_score = score
-                            
-                            if curr_idx == len(HR_QUESTIONS) - 1:
-                                # Final Round update
-                                all_trans = db.client.table('hr_voice_transcriptions').select('score').eq('user_id', user_id).execute()
-                                all_scores = [d.get('score', 0) for d in all_trans.data] + [score]
-                                final_avg = int(sum(all_scores) / len(all_scores))
-                                db.client.table('candidate_scores').update({'round5_score': final_avg}).eq('user_id', user_id).execute()
-                                db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
-                            
-                            st.rerun()
-            else:
-                # Live countdown clock tick
-                time.sleep(1)
+                db.client.table('hr_voice_transcriptions').insert({
+                    'user_id': user_id,
+                    'question': question,
+                    'transcription': trans,
+                    'score': score 
+                }).execute()
+                
+                st.session_state.last_transcription = trans
+                st.session_state.last_score = score
+                
+                if curr_idx == len(HR_QUESTIONS) - 1:
+                    # Final Round update
+                    all_trans = db.client.table('hr_voice_transcriptions').select('score').eq('user_id', user_id).execute()
+                    all_scores = [d.get('score', 0) for d in all_trans.data] + [score]
+                    final_avg = int(sum(all_scores) / len(all_scores))
+                    db.client.table('candidate_scores').update({'round5_score': final_avg}).eq('user_id', user_id).execute()
+                    db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
+                
                 st.rerun()
-        else:
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button("🔴 INITIATE CAPTURE (MAX 30s)", use_container_width=True):
-                    start_asynchronous_recording(max_duration=30)
-                    st.rerun()
+        
+        # HTML5 Audio Recorder Component with AnalyserNode wave visualizer
+        import streamlit.components.v1 as components
+        
+        recorder_html = """
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 25px; text-align: center; font-family: sans-serif; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); backdrop-filter: blur(8px);">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+                <div style="font-size: 13px; font-weight: 700; color: #a78bfa; letter-spacing: 2px; text-transform: uppercase;">Vocal Wave Capture</div>
+                <canvas id="waveform" style="width: 100%; height: 90px; border-radius: 8px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05);"></canvas>
+                <div style="display: flex; align-items: center; gap: 25px; margin-top: 5px;">
+                    <button id="record-btn" style="background: linear-gradient(135deg, #7c3aed, #db2777); border: none; color: #fff; font-weight: 700; padding: 12px 24px; border-radius: 30px; cursor: pointer; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3); display: flex; align-items: center; gap: 10px; transition: all 0.3s ease; font-size: 14px;">
+                        <span id="record-dot" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ffffff; transition: all 0.3s ease;"></span>
+                        <span id="record-text">🔴 Ingest Vocal Wave</span>
+                    </button>
+                    <div id="record-timer" style="font-size: 20px; font-weight: 700; color: #fff; font-family: monospace;">00:00</div>
+                </div>
+                <div id="status-msg" style="font-size: 12px; color: rgba(255,255,255,0.4); height: 18px;">Click to initiate micro-capture</div>
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            const parentDoc = window.parent.document;
+            const parentWin = window.parent;
+            
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let audioContext = null;
+            let analyser = null;
+            let dataArray = null;
+            let source = null;
+            let drawVisual = null;
+            let startTime = 0;
+            let timerInterval = null;
+            
+            const recordBtn = document.getElementById('record-btn');
+            const recordDot = document.getElementById('record-dot');
+            const recordText = document.getElementById('record-text');
+            const recordTimer = document.getElementById('record-timer');
+            const statusMsg = document.getElementById('status-msg');
+            const canvas = document.getElementById('waveform');
+            const canvasCtx = canvas.getContext('2d');
+            
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            function drawStaticWave() {
+                canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+                canvasCtx.lineWidth = 2;
+                canvasCtx.strokeStyle = 'rgba(167, 139, 250, 0.2)';
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, canvas.height / 2);
+                canvasCtx.lineTo(canvas.width, canvas.height / 2);
+                canvasCtx.stroke();
+            }
+            drawStaticWave();
+            
+            recordBtn.addEventListener('click', async () => {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    await startRecording();
+                } else {
+                    stopRecording();
+                }
+            });
+            
+            async function startRecording() {
+                try {
+                    audioChunks = [];
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    source = audioContext.createMediaStreamSource(stream);
+                    source.connect(analyser);
+                    
+                    const bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+                    
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        cancelAnimationFrame(drawVisual);
+                        drawStaticWave();
+                        
+                        stream.getTracks().forEach(track => track.stop());
+                        if (audioContext) audioContext.close();
+                        
+                        statusMsg.textContent = "Processing and uploading vocal vectors...";
+                        statusMsg.style.color = "#a78bfa";
+                        
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = () => {
+                            const base64Data = reader.result.split(',')[1];
+                            const textareas = Array.from(parentDoc.querySelectorAll('textarea'));
+                            const targetTextArea = textareas.find(t => t.placeholder === "audio_base64_placeholder");
+                            
+                            if (targetTextArea) {
+                                targetTextArea.value = base64Data;
+                                const event = new Event('input', { bubbles: true });
+                                targetTextArea.dispatchEvent(event);
+                                
+                                setTimeout(() => {
+                                    const submitBtn = Array.from(parentDoc.querySelectorAll('button')).find(b => b.textContent.includes("hidden_voice_submit_btn"));
+                                    if (submitBtn) submitBtn.click();
+                                }, 300);
+                            } else {
+                                statusMsg.textContent = "Error: Input channel not found";
+                                statusMsg.style.color = "#ff4b4b";
+                            }
+                        };
+                    };
+                    
+                    mediaRecorder.start();
+                    startTime = Date.now();
+                    recordText.textContent = "⏹️ STOP CAPTURE";
+                    recordBtn.style.background = "linear-gradient(135deg, #dc2626, #b91c1c)";
+                    recordBtn.style.boxShadow = "0 4px 20px rgba(220, 38, 38, 0.4)";
+                    recordDot.style.background = "#ffffff";
+                    statusMsg.textContent = "🎤 Listening to response...";
+                    statusMsg.style.color = "#ff4b4b";
+                    
+                    timerInterval = setInterval(() => {
+                        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                        const secs = String(elapsed % 60).padStart(2, '0');
+                        recordTimer.textContent = `${mins}:${secs}`;
+                        
+                        if (elapsed >= 30) {
+                            stopRecording();
+                        }
+                    }, 1000);
+                    
+                    visualize();
+                    
+                } catch (e) {
+                    console.error("Microphone access error:", e);
+                    statusMsg.textContent = "Permission denied or microphone missing.";
+                    statusMsg.style.color = "#ff4b4b";
+                }
+            }
+            
+            function stopRecording() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    clearInterval(timerInterval);
+                    recordText.textContent = "🔴 Ingest Vocal Wave";
+                    recordBtn.style.background = "linear-gradient(135deg, #7c3aed, #db2777)";
+                    recordBtn.style.boxShadow = "0 4px 20px rgba(124, 58, 237, 0.4)";
+                    recordTimer.textContent = "00:00";
+                }
+            }
+            
+            function visualize() {
+                drawVisual = requestAnimationFrame(visualize);
+                analyser.getByteFrequencyData(dataArray);
+                
+                canvasCtx.fillStyle = 'rgba(10, 10, 15, 0.3)';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const barWidth = (canvas.width / analyser.frequencyBinCount) * 1.5;
+                let barHeight;
+                let x = 0;
+                
+                for (let i = 0; i < analyser.frequencyBinCount; i++) {
+                    barHeight = dataArray[i] / 2;
+                    
+                    const grad = canvasCtx.createLinearGradient(0, canvas.height, 0, 0);
+                    grad.addColorStop(0, '#7c3aed');
+                    grad.addColorStop(1, '#db2777');
+                    
+                    canvasCtx.fillStyle = grad;
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+                    
+                    x += barWidth;
+                }
+            }
+        })();
+        </script>
+        """
+        components.html(recorder_html, height=240)
 
         # Display last transcription if available
         if 'last_transcription' in st.session_state:

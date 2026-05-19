@@ -246,14 +246,41 @@ def inject_browser_guards():
             localStorage.removeItem('pending_blur');
 
             // --- SECURE PROCTORING SINGLETON SCRIPT INJECTION ---
-            // Clean up previous event listener if it exists to prevent dead object references
+            const triggerPendingActions = () => {
+                if (localStorage.getItem('pending_tab_switch') === 'true') {
+                    const btn = findButtonByText("hidden_tab_trigger");
+                    if (btn) {
+                        localStorage.removeItem('pending_tab_switch');
+                        forceClick(btn);
+                    }
+                }
+                if (localStorage.getItem('pending_blur') === 'true') {
+                    const btn = findButtonByText("hidden_blur_trigger");
+                    if (btn) {
+                        localStorage.removeItem('pending_blur');
+                        forceClick(btn);
+                    }
+                }
+            };
+
+            // Clean up previous event listeners if they exist to prevent dead object references
             if (parentWin.__activeVisibilityListener) {
                 try {
                     parentDoc.removeEventListener('visibilitychange', parentWin.__activeVisibilityListener, true);
                 } catch(e) {}
             }
+            if (parentWin.__activeBlurListener) {
+                try {
+                    parentWin.removeEventListener('blur', parentWin.__activeBlurListener, true);
+                } catch(e) {}
+            }
+            if (parentWin.__activeFocusListener) {
+                try {
+                    parentWin.removeEventListener('focus', parentWin.__activeFocusListener, true);
+                } catch(e) {}
+            }
 
-            // Define the fresh, active handler bound to the current live iframe context
+            // Define handlers
             const handleVisibilityChange = () => {
                 if (parentDoc.visibilityState === 'hidden') {
                     console.warn("⚠️ SECURE AGENT: Visibility Hidden Detected!");
@@ -263,14 +290,33 @@ def inject_browser_guards():
                         localStorage.removeItem('pending_tab_switch');
                         forceClick(btn);
                     }
+                } else if (parentDoc.visibilityState === 'visible') {
+                    triggerPendingActions();
                 }
             };
 
-            // Save reference and attach fresh listener
+            const handleBlur = () => {
+                console.warn("⚠️ SECURE AGENT: Window Blur Detected!");
+                localStorage.setItem('pending_blur', 'true');
+                const btn = findButtonByText("hidden_blur_trigger");
+                if (btn) {
+                    localStorage.removeItem('pending_blur');
+                    forceClick(btn);
+                }
+            };
+
+            // Save reference and attach fresh listeners
             parentWin.__activeVisibilityListener = handleVisibilityChange;
+            parentWin.__activeBlurListener = handleBlur;
+            parentWin.__activeFocusListener = triggerPendingActions;
+
             try {
                 parentDoc.addEventListener('visibilitychange', handleVisibilityChange, true);
+                parentWin.addEventListener('blur', handleBlur, true);
+                parentWin.addEventListener('focus', triggerPendingActions, true);
                 console.log("🔒 JEE-MAINS SECURE PROCTORING ACTIVE WITH LIVING CONTEXT!");
+                // Trigger any pending actions immediately on load
+                triggerPendingActions();
             } catch(e) { console.error("Error launching secure agent:", e); }
 
             // Re-install keyboard and copy blocks
@@ -338,6 +384,7 @@ def inject_browser_guards():
         </script>
     """
     components.html(f"<!-- Cache Buster: {time.time()} -->\n" + js_code, height=2)
+
 
 def render_security_sidebar():
     if is_e2e_bypass():
