@@ -361,6 +361,7 @@ def render_security_sidebar():
     if is_e2e_bypass():
         return
     
+    violations = len(st.session_state.get("security_violations", []))
     switches = st.session_state.get("tab_switch_count", 0)
     verified_label = "✅ SECURED" if st.session_state.proctoring_verified else "⏳ PENDING"
     verified_color = "#43e97b" if st.session_state.proctoring_verified else "#ffb347"
