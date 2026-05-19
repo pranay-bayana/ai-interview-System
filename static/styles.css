@@ -176,5 +176,15 @@ h1, h2, h3 {
     opacity: 1 !important;
 }
 
+/* Ensure radio buttons and select box labels/options are bright white and readable */
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] p,
+[data-testid="stRadio"] div,
+[data-testid="stRadio"] span,
+[data-baseweb="select"] div,
+[data-baseweb="select"] span {
+    color: #ffffff !important;
+}
+
 /* Streamlit specific UI hiding */
 #MainMenu, footer, header { visibility: hidden; }
