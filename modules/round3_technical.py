@@ -111,6 +111,17 @@ def calculate_technical_score(answers: dict, role: str) -> int:
     questions = TECHNICAL_QUESTIONS.get(role, TECHNICAL_QUESTIONS['python'])
     total_score = 0
     
+    # Core technical words definitions to qualify for a score > 5
+    core_keywords_map = {
+        'python': {'mutable', 'immutable', 'decorator', 'wrapper', 'gil', 'thread', 'mutex', 'constructor', 'instance', 'comprehension', 'iterable'},
+        'java': {'polymorphism', 'inheritance', 'overriding', 'overloading', 'interface', 'abstract', 'hashmap', 'linkedlist', 'arraylist', 'reference', 'equals'},
+        'qa': {'regression', 'integration', 'e2e', 'tdd', 'usability', 'validation', 'verification', 'black box', 'white box', 'pyramid'}
+    }
+    
+    core_keywords = core_keywords_map.get(role, core_keywords_map['python'])
+    matched_core_count = 0
+    all_answers_text = ""
+    
     for question in questions:
         answer = answers.get(str(question['id']), '').lower().strip()
         
@@ -124,11 +135,21 @@ def calculate_technical_score(answers: dict, role: str) -> int:
             if vowels / len(letters) < 0.15:
                 continue
                 
+        all_answers_text += " " + answer
         keywords = question['keywords']
         matched_keywords = sum(1 for keyword in keywords if keyword.lower() in answer)
         question_score = min(question['max_score'], matched_keywords)
         total_score += question_score
     
+    # Count matched core keywords
+    for ck in core_keywords:
+        if ck in all_answers_text:
+            matched_core_count += 1
+            
+    # Cap score at 5 if candidate has matched fewer than 2 core technical terms
+    if matched_core_count < 2:
+        return min(5, total_score)
+        
     return min(10, total_score)
 
 def save_technical_answers(user_id: int, answers: dict, role: str, score: int):
