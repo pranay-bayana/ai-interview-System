@@ -458,8 +458,11 @@ def render_round5():
                 textareas.forEach(ta => {
                     if (ta.placeholder === "audio_base64_placeholder") {
                         const wrapper = ta.closest('div[data-testid="stTextArea"]');
-                        if (wrapper && wrapper.style.display !== 'none') {
-                            wrapper.style.display = 'none';
+                        if (wrapper && wrapper.style.opacity !== '0') {
+                            wrapper.style.opacity = '0';
+                            wrapper.style.position = 'absolute';
+                            wrapper.style.pointerEvents = 'none';
+                            wrapper.style.zIndex = '-9999';
                         }
                     }
                 });
@@ -468,8 +471,11 @@ def render_round5():
                 buttons.forEach(btn => {
                     if (btn.textContent && btn.textContent.includes("hidden_voice_submit_btn")) {
                         const wrapper = btn.closest('div[data-testid="stButton"]');
-                        if (wrapper && wrapper.style.display !== 'none') {
-                            wrapper.style.display = 'none';
+                        if (wrapper && wrapper.style.opacity !== '0') {
+                            wrapper.style.opacity = '0';
+                            wrapper.style.position = 'absolute';
+                            wrapper.style.pointerEvents = 'none';
+                            wrapper.style.zIndex = '-9999';
                         }
                     }
                 });
