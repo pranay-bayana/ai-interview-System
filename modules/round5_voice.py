@@ -167,7 +167,7 @@ def render_round5():
         # Hide the text area and submit button using CSS
         st.markdown("""
             <style>
-            div[data-testid="stTextArea"] {
+            .hidden-elements {
                 position: absolute !important;
                 width: 1px !important;
                 height: 1px !important;
@@ -176,14 +176,13 @@ def render_round5():
                 overflow: hidden !important;
                 clip: rect(0, 0, 0, 0) !important;
                 border: 0 !important;
-                opacity: 0.01 !important;
-            }
-            div[data-testid="stButton"] button:has(div:contains("hidden_voice_submit_btn")) {
-                display: none !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
             }
             </style>
         """, unsafe_allow_html=True)
         
+        st.markdown('<div class="hidden-elements">', unsafe_allow_html=True)
         # Hidden text area to capture base64 audio data from the browser
         audio_base64 = st.text_area(
             "audio_base64_data",
@@ -195,6 +194,7 @@ def render_round5():
         
         # Hidden submit button to trigger processing
         voice_submit = st.button("hidden_voice_submit_btn")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         if voice_submit and audio_base64:
             import base64
@@ -223,6 +223,46 @@ def render_round5():
                     db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
                 
                 st.rerun()
+
+        # Toggle manual text entry
+        if "show_manual_voice_input" not in st.session_state:
+            st.session_state.show_manual_voice_input = False
+            
+        st.markdown('<div style="text-align: center; margin-top: 15px;">', unsafe_allow_html=True)
+        if st.button("⌨️ Write response text instead", key="toggle_manual_input"):
+            st.session_state.show_manual_voice_input = not st.session_state.show_manual_voice_input
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        if st.session_state.show_manual_voice_input:
+            st.markdown('<div class="glass-card" style="margin-top: 20px;">', unsafe_allow_html=True)
+            manual_text = st.text_area("Type your answer here:", placeholder="Type your response to the prompt...")
+            if st.button("SUBMIT ANSWER & NEXT ➡️", type="primary", use_container_width=True):
+                if manual_text.strip():
+                    with st.spinner("Analyzing response..."):
+                        score = evaluate_response(question, manual_text)
+                        db.client.table('hr_voice_transcriptions').insert({
+                            'user_id': user_id,
+                            'question': question,
+                            'transcription': manual_text,
+                            'score': score 
+                        }).execute()
+                        
+                        st.session_state.last_transcription = manual_text
+                        st.session_state.last_score = score
+                        
+                        if curr_idx == len(HR_QUESTIONS) - 1:
+                            all_trans = db.client.table('hr_voice_transcriptions').select('score').eq('user_id', user_id).execute()
+                            all_scores = [d.get('score', 0) for d in all_trans.data] + [score]
+                            final_avg = int(sum(all_scores) / len(all_scores))
+                            db.client.table('candidate_scores').update({'round5_score': final_avg}).eq('user_id', user_id).execute()
+                            db.client.table('candidate_status').update({'current_round': 5}).eq('user_id', user_id).execute()
+                        
+                        st.session_state.show_manual_voice_input = False
+                        st.rerun()
+                else:
+                    st.warning("Please type a response before submitting.")
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # HTML5 Audio Recorder Component with AnalyserNode wave visualizer
         import streamlit.components.v1 as components
