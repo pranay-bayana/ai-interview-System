@@ -117,11 +117,7 @@ def main():
 
     if not st.session_state.authenticated:
         st.markdown('<div style="height: 12vh;"></div>', unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["🔐 LOGIN", "📝 SIGNUP"])
-        with tab1:
-            render_auth_page()
-        with tab2:
-            st.info("Registration is currently private.")
+        render_auth_page()
     else:
         # Sidebar Branding (Sync with Landing Page Logo)
         st.sidebar.markdown('<div class="sidebar-logo">INTERVIEWER.<span style="color:#6366f1">AI</span></div>', unsafe_allow_html=True)
