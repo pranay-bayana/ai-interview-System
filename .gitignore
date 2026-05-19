@@ -9,3 +9,7 @@ __pycache__/
 pwd_info.txt
 button_audit.py
 inspect_pwd.py
+.DS_Store
+*.db
+*.sqlite
+uploads/
