@@ -44,7 +44,7 @@ class DatabaseManager:
         if self._client: return self._client
             
         try:
-            is_real = self.supabase_url and 'your_project_url' not in self.supabase_url
+            is_real = self.supabase_url and 'your_project_url' not in self.supabase_url and 'mock' not in self.supabase_url
             if is_real:
                 self._client = create_client(self.supabase_url, self.supabase_key)
                 return self._client
