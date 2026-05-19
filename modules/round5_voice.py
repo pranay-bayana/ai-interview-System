@@ -40,6 +40,18 @@ def transcribe_audio(audio_bytes: bytes) -> str:
 
 def evaluate_response(question: str, response: str) -> int:
     """Evaluate response using OpenAI GPT, or fall back to local Ollama LLaVA AI"""
+    # Guard against gibberish or extremely short answers
+    text = response.strip()
+    if len(text) < 15:
+        return 1
+    
+    letters = [c for c in text.lower() if c.isalpha()]
+    if letters:
+        vowels = sum(1 for c in letters if c in 'aeiouy')
+        # Gibberish check: English text typically has at least 15-20% vowels
+        if vowels / len(letters) < 0.15:
+            return 1
+
     try:
         api_key = os.getenv('OPENAI_API_KEY')
         if api_key and "your_key" not in api_key:

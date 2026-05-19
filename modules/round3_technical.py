@@ -112,7 +112,18 @@ def calculate_technical_score(answers: dict, role: str) -> int:
     total_score = 0
     
     for question in questions:
-        answer = answers.get(str(question['id']), '').lower()
+        answer = answers.get(str(question['id']), '').lower().strip()
+        
+        # Guard against gibberish or extremely short answers
+        if len(answer) < 15:
+            continue
+        
+        letters = [c for c in answer if c.isalpha()]
+        if letters:
+            vowels = sum(1 for c in letters if c in 'aeiouy')
+            if vowels / len(letters) < 0.15:
+                continue
+                
         keywords = question['keywords']
         matched_keywords = sum(1 for keyword in keywords if keyword.lower() in answer)
         question_score = min(question['max_score'], matched_keywords)
