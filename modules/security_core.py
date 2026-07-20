@@ -6,7 +6,10 @@ import os
 import time
 import base64
 import json
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 import numpy as np
 import requests
 import streamlit as st
@@ -65,6 +68,8 @@ def is_disqualified() -> bool:
 # --- Vision Intelligence ---
 
 def analyze_frame_opencv(image_bytes: bytes) -> dict:
+    if cv2 is None:
+        return {"person_count": 0, "electronic_devices_detected": False, "ok": False, "engine": "opencv-fallback-disabled"}
     try:
         nparr = np.frombuffer(image_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
