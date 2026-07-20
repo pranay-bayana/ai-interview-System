@@ -2,4 +2,3 @@ portaudio19-dev
 libasound2-dev
 libgl1
 libgl1-mesa-glx
-libglib2.0-0
